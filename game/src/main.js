@@ -31,6 +31,8 @@ let state = {
   rings: world.rings,
   runway: world.runway,
   clouds: world.clouds,
+  birds: world.birds,
+  popups: [],
   won: false,
   player: {
     x: 0,
@@ -46,16 +48,17 @@ let state = {
 
 if (shotMode === 'play') {
   state.mode = 'play';
-  state.player.z = state.rings[0].z - 200;
-  state.player.x = state.rings[0].x;
-  state.player.y = state.rings[0].y;
-  state.ringsPassed = 1;
-  state.rings[0].passed = true;
-  state.score = 500;
+  // Place the player just before a GOLD ring (first gold ring in state.rings)
+  const goldRing = state.rings.find(r => r.isGold) || state.rings[0];
+  state.player.z = goldRing.z - 300;
+  state.player.x = goldRing.x;
+  state.player.y = goldRing.y;
+  state.ringsPassed = 2;
+  state.score = 400;
 } else if (shotMode === 'end') {
   state.mode = 'gameover';
   state.won = true;
-  state.score = 2500;
+  state.score = 3500;
   state.time = 45.2;
   state.player.x = state.runway.x;
   state.player.y = state.runway.y + 10;
@@ -84,14 +87,14 @@ function initAudio() {
   }
 }
 
-function playChime() {
+function playChime(isGold = false) {
   if (!audioCtx) return;
   try {
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.type = 'sine';
-    o.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-    o.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.3);
+    o.frequency.setValueAtTime(isGold ? 880 : 587.33, audioCtx.currentTime); // D5 or A5
+    o.frequency.exponentialRampToValueAtTime(isGold ? 1320 : 880, audioCtx.currentTime + 0.3);
     g.gain.setValueAtTime(0.1, audioCtx.currentTime);
     g.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
     o.connect(g);
@@ -111,6 +114,10 @@ function update(dt) {
   if (input.isDown('KeyR')) {
     window.location.reload();
   }
+
+  // Update popups TTL
+  state.popups.forEach(p => p.ttl -= dt);
+  state.popups = state.popups.filter(p => p.ttl > 0);
 
   if (state.mode === 'start') {
     initAudio();
@@ -172,7 +179,7 @@ function update(dt) {
     if (distToRunway < 900 && state.player.speed < 22) {
       state.mode = 'gameover';
       state.won = true;
-      state.score += 1000;
+      state.score += 1000 + state.ringsPassed * 100;
     } else {
       state.mode = 'gameover';
       state.won = false;
@@ -191,8 +198,16 @@ function update(dt) {
       if (dist < ring.radius + 50) {
         ring.passed = true;
         state.ringsPassed++;
-        state.score += 200;
-        playChime();
+        const pts = ring.isGold ? 500 : 200;
+        state.score += pts;
+        playChime(ring.isGold);
+        state.popups.push({
+          x: ring.x,
+          y: ring.y,
+          z: ring.z,
+          text: `+${pts}` + (ring.isGold ? ' GOLD!' : ''),
+          ttl: 1.0
+        });
       }
     }
   });
